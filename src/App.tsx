@@ -93,6 +93,27 @@ const LayoutCtx = createContext<Layout>({
 })
 function useLayout() { return useContext(LayoutCtx) }
 
+function appBase() {
+  const raw = import.meta.env.BASE_URL || '/'
+  return raw.endsWith('/') ? raw : `${raw}/`
+}
+
+function paidFromUrl() {
+  if (typeof window === 'undefined') return false
+  const { pathname, search, hash } = window.location
+  const clean = pathname.replace(/\/+$/, '') || '/'
+  if (clean.endsWith('/paid')) return true
+  if (clean.endsWith('/free')) return false
+  const q = new URLSearchParams(search)
+  if (q.get('mode') === 'paid' || q.has('paid')) return true
+  if (/^#\/?paid/.test(hash)) return true
+  return false
+}
+
+function urlForPaid(paid: boolean) {
+  return paid ? `${appBase()}paid` : appBase()
+}
+
 function metricsFor(bp: BP) {
   const pagePad = bp === 'sm' ? 16 : 24
   const featW = bp === 'sm' ? 168 : bp === 'md' ? 208 : 262
@@ -908,16 +929,21 @@ function ActiveTariffsCard() {
       </span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, overflow: 'visible' }}>
         {/* Free plan */}
-        <div style={{ border: '1px solid rgba(0,16,61,0.08)', borderRadius: 16, ...tile, minHeight: 92, display: 'flex', alignItems: 'flex-start', overflow: 'hidden', boxSizing: 'border-box' }}>
+        <div style={{ boxShadow: 'inset 0 0 0 1px rgba(0,16,61,0.08)', borderRadius: 16, ...tile, minHeight: 92, display: 'flex', alignItems: 'flex-start', overflow: 'hidden', boxSizing: 'border-box', position: 'relative' }}>
+          <div style={{
+            position: 'absolute', top: 0, right: 0, zIndex: 1,
+            background: '#f0f1f3', borderRadius: '0 16px 0 16px',
+            height: 21, padding: '3px 12px 4px', boxSizing: 'border-box',
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          }}>
+            <span style={{ fontFamily: "var(--fontfamilybase)", fontSize: 11, lineHeight: '14px', color: '#2c2d2e' }}>Бесплатный</span>
+          </div>
           <div style={{ padding: 16, display: 'flex', alignItems: 'flex-start' }}>
             <div style={{ width: 32, height: 32, borderRadius: 100, overflow: 'hidden', background: '#07f' }}>
               <img src={PG.serviceIcos} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           </div>
-          <div style={{ flex: 1, padding: '16px 16px 16px 0', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-            <div style={{ position: 'absolute', top: -1, right: -1, background: '#f0f1f3', borderRadius: '0 16px 0 16px', padding: '3px 12px 4px' }}>
-              <span style={{ fontFamily: "var(--fontfamilybase)", fontSize: 11, lineHeight: '14px', color: '#2c2d2e' }}>Бесплатный</span>
-            </div>
+          <div style={{ flex: 1, padding: '16px 16px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div>
               <div style={{ fontFamily: "var(--fontfamilyaccent)", fontSize: 15, lineHeight: '20px', color: '#2c2d2e' }}>8 ГБ</div>
               <div style={{ fontFamily: "var(--fontfamilybase)", fontSize: 12, lineHeight: '16px', color: 'rgba(39,43,55,0.5)' }}>И другие функции в Почте и Облаке</div>
@@ -933,7 +959,12 @@ function ActiveTariffsCard() {
           { title: '64 ГБ на месяц', sub: 'Следующий платёж 18 мая 2026', badgeBg: 'rgba(0,119,255,0.1)' },
         ] as const).map(t => (
           <div key={t.title} style={{ background: 'rgba(0,119,255,0.06)', borderRadius: 16, ...tile, minHeight: 92, display: 'flex', alignItems: 'flex-start', overflow: 'hidden', boxSizing: 'border-box', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, right: 0, background: t.badgeBg, borderRadius: '0 16px 0 16px', padding: '3px 12px 4px' }}>
+            <div style={{
+              position: 'absolute', top: 0, right: 0, zIndex: 1,
+              background: t.badgeBg, borderRadius: '0 16px 0 16px',
+              height: 21, padding: '3px 12px 4px', boxSizing: 'border-box',
+              display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+            }}>
               <span style={{ fontFamily: "var(--fontfamilybase)", fontSize: 11, lineHeight: '14px', color: '#1c4479' }}>Минимальный</span>
             </div>
             <div style={{ padding: 16, display: 'flex', alignItems: 'flex-start' }}>
@@ -1337,7 +1368,25 @@ function ComparisonTable({ compact }: { compact: boolean }) {
 export default function App() {
   const [compact, setCompact] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [paid, setPaid] = useState(false)
+  const [paid, setPaidState] = useState(() => paidFromUrl())
+
+  const setPaid = (v: boolean) => {
+    setPaidState(v)
+    const next = urlForPaid(v)
+    const here = window.location.pathname.endsWith('/') ? window.location.pathname : `${window.location.pathname}/`
+    const want = next.endsWith('/') ? next : `${next}/`
+    if (here !== want) window.history.pushState({ paid: v }, '', next)
+  }
+
+  useEffect(() => {
+    const sync = () => setPaidState(paidFromUrl())
+    window.addEventListener('popstate', sync)
+    window.addEventListener('hashchange', sync)
+    return () => {
+      window.removeEventListener('popstate', sync)
+      window.removeEventListener('hashchange', sync)
+    }
+  }, [])
   const [w, setW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1366))
   const scrollRef   = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)

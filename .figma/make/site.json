@@ -1,0 +1,10 @@
+{
+  "description": "This interactive table application enhances user experience with features like scrollable headers, hover effects, and detailed tooltips for each advantage.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

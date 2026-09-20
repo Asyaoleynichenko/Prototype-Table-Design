@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Arial:Regular';
+  src: url('/fonts/Arial-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Arial:Bold';
+  src: url('/fonts/Arial-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'VK Sans Display:Medium';
+  src: url('/fonts/VK_Sans_Display-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'VK Sans Display:DemiBold';
+  src: url('/fonts/VK_Sans_Display-DemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'VK Sans Display:Regular';
+  src: url('/fonts/VK_Sans_Display-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'VK Sans Text:Medium';
+  src: url('/fonts/VK_Sans_Text-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+}
+
+html, body, #root {
+  height: 100%;
+}

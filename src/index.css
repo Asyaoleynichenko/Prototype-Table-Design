@@ -1,47 +1,114 @@
 @import 'tailwindcss';
 
+:root {
+  --fontfamilyaccent: 'VK Sans Display:Medium', 'VK Sans Display', sans-serif;
+  --fontfamilybase: Arial, 'Arial:Regular', sans-serif;
+}
+
 @font-face {
-  font-family: 'Arial:Regular';
-  src: url('/fonts/Arial-Regular.woff2') format('woff2');
+  font-family: 'Arial';
+  src: url('/fonts/Arial-Regular.woff2') format('truetype');
   font-weight: 400;
   font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Arial:Regular';
+  src: url('/fonts/Arial-Regular.woff2') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Arial';
+  src: url('/fonts/Arial-Bold.woff2') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
   font-family: 'Arial:Bold';
-  src: url('/fonts/Arial-Bold.woff2') format('woff2');
+  src: url('/fonts/Arial-Bold.woff2') format('truetype');
   font-weight: 700;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-  font-family: 'VK Sans Display:Medium';
-  src: url('/fonts/VK_Sans_Display-Medium.woff2') format('woff2');
-  font-weight: 500;
+  font-family: 'VK Sans Display';
+  src: url('/fonts/VK_Sans_Display-Regular.woff2') format('truetype');
+  font-weight: 400;
   font-style: normal;
-}
-
-@font-face {
-  font-family: 'VK Sans Display:DemiBold';
-  src: url('/fonts/VK_Sans_Display-DemiBold.woff2') format('woff2');
-  font-weight: 600;
-  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
   font-family: 'VK Sans Display:Regular';
-  src: url('/fonts/VK_Sans_Display-Regular.woff2') format('woff2');
+  src: url('/fonts/VK_Sans_Display-Regular.woff2') format('truetype');
   font-weight: 400;
   font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'VK Sans Display';
+  src: url('/fonts/VK_Sans_Display-Medium.woff2') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'VK Sans Display:Medium';
+  src: url('/fonts/VK_Sans_Display-Medium.woff2') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'VK Sans Display';
+  src: url('/fonts/VK_Sans_Display-DemiBold.woff2') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'VK Sans Display:DemiBold';
+  src: url('/fonts/VK_Sans_Display-DemiBold.woff2') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'VK Sans Text';
+  src: url('/fonts/VK_Sans_Text-Medium.woff2') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
   font-family: 'VK Sans Text:Medium';
-  src: url('/fonts/VK_Sans_Text-Medium.woff2') format('woff2');
+  src: url('/fonts/VK_Sans_Text-Medium.woff2') format('truetype');
   font-weight: 500;
   font-style: normal;
+  font-display: swap;
 }
 
 html, body, #root {
   height: 100%;
+  overflow: hidden;
+  font-family: var(--fontfamilybase);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
 }

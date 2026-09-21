@@ -17,15 +17,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          lfs: true
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build:gh
+      # Ensure published branch contains real binaries, not LFS pointer text
+      - name: Verify images are not LFS pointers
+        run: |
+          set -e
+          sample="dist/assets/ed958.png"
+          if head -c 20 "$sample" | grep -q "git-lfs"; then
+            echo "ERROR: $sample is still a Git LFS pointer — images would break on Pages"
+            head -5 "$sample"
+            exit 1
+          fi
+          file "$sample"
+          ls -la dist/assets/*.{png,jpg,jpeg,webp} 2>/dev/null || ls -la dist/assets/*.png
       - name: Publish to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           force_orphan: true
+          enable_jekyll: false

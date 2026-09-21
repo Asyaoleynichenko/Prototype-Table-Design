@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
 import { createPortal } from 'react-dom'
 
-const AP = '/assets'
+const AP = `${import.meta.env.BASE_URL}assets`
 
 // ── Table icons ─────────────────────────────────────────────────────────────
 const ICO = {

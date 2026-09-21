@@ -13,6 +13,27 @@
     <!-- figma:body-start -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Static GitHub Pages (main branch) cannot run /src/main.tsx — fall back to built /docs -->
+    <script>
+      (function () {
+        var root = document.getElementById('root')
+        var tries = 0
+        var timer = setInterval(function () {
+          tries += 1
+          if (root && root.childNodes.length > 0) {
+            clearInterval(timer)
+            return
+          }
+          if (tries >= 8) {
+            clearInterval(timer)
+            var base = location.pathname.replace(/\/+$/, '')
+            if (!/\/docs$/i.test(base)) {
+              location.replace(base + '/docs/')
+            }
+          }
+        }, 250)
+      })()
+    </script>
     <!-- figma:body-end -->
   </body>
 </html>

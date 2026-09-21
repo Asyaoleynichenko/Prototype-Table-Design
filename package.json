@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:gh": "GITHUB_PAGES_BASE=/Prototype-Table-Design/ vite build && cp dist/index.html dist/404.html",
     "preview": "vite preview",
     "format": "oxfmt"
   },

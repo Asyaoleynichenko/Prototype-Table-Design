@@ -1,5 +1,13 @@
 {
-  "description": "This interactive table application enhances user experience with features like scrollable headers, hover effects, and detailed tooltips for each advantage.",
+  "title": "Личный кабинет подписки Mail Space",
+  "description": "Управление подпиской и местом в едином пространстве Почты и Облака.",
+  "language": "ru",
+  "icons": {
+    "icon": "/favicon-v6.png"
+  },
+  "customScripts": {
+    "headEnd": "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon-v6.svg\" /><link rel=\"apple-touch-icon\" href=\"/favicon-v6.png\" />"
+  },
   "robots": {
     "index": false
   },

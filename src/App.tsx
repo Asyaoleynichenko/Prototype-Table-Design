@@ -36,6 +36,7 @@ const PG = {
   storageAva:  `${AP}/11659.png`,
   avatarSvg1:  `${AP}/54cc3.svg`,
   avatarSvg2:  `${AP}/621ae.svg`,
+  avatarUser:  `${AP}/f7da4.svg`,
   counter:     `${AP}/b7469.svg`,
   // actions card
   promoIcon:   `${AP}/f6c7c.svg`,
@@ -57,15 +58,34 @@ const PG = {
   flash:       `${AP}/33c88.svg`,
 }
 
+const BUY = {
+  pct:      `${AP}/buy-pct.svg`,
+  cloud:    `${AP}/buy-cloud.svg`,
+  infinity: `${AP}/buy-infinity.svg`,
+  done:     `${AP}/buy-done.svg`,
+  close:    `${AP}/buy-close.svg`,
+  cross:    `${AP}/buy-cross.svg`,
+  stars:    `${AP}/buy-stars.svg`,
+}
+
 // ── Breakpoints ──────────────────────────────────────────────────────────────
-// xl ≥1366  desktop mock (sidebar + 992 content)
-// lg ≥1024  laptop: sidebar stays, content fills
-// md ≥768   tablet: no sidebar, stacked cards
-// sm <768   mobile
+// Layout math from Figma: sidebar 264 + main 992 = 1256.
+// xl ≥1366  desktop mock — sidebar + fixed 992 content
+// lg ≥1280  laptop — sidebar + fluid content (≥992 avail)
+// md ≥768   tablet — no sidebar; cards row if content ≥960
+// sm <768   mobile — stacked, compact table
 type BP = 'sm' | 'md' | 'lg' | 'xl'
+
+// Figma desktop: 1366 = sidebar 264 + gap 16 + content 992 (+ leftover margin)
+const SIDEBAR_W = 264
+const SIDEBAR_GAP = 16
+const CONTENT_DESKTOP = 992
+const CARD_ROW_MIN = 960
+const PLAN_W_DESKTOP = 250
+
 function widthToBp(w: number): BP {
   if (w >= 1366) return 'xl'
-  if (w >= 1200) return 'lg'
+  if (w >= 1280) return 'lg'
   if (w >= 768) return 'md'
   return 'sm'
 }
@@ -77,19 +97,23 @@ interface Layout {
   planW: number
   tablePad: number
   pagePad: number
+  contentW: number
   hasSidebar: boolean
   stackCards: boolean
   menuOpen: boolean
   setMenuOpen: (v: boolean) => void
   paid: boolean
   setPaid: (v: boolean) => void
+  buyPlanId: string | null
+  setBuyPlanId: (id: string | null) => void
 }
 
-const PLAN_W = 250
 const LayoutCtx = createContext<Layout>({
-  bp: 'xl', w: 1366, featW: 262, planW: PLAN_W, tablePad: 24, pagePad: 24,
-  hasSidebar: true, stackCards: false, menuOpen: false, setMenuOpen: () => {},
+  bp: 'xl', w: 1366, featW: 262, planW: PLAN_W_DESKTOP, tablePad: 24, pagePad: 24,
+  contentW: CONTENT_DESKTOP, hasSidebar: true, stackCards: false,
+  menuOpen: false, setMenuOpen: () => {},
   paid: false, setPaid: () => {},
+  buyPlanId: null, setBuyPlanId: () => {},
 })
 function useLayout() { return useContext(LayoutCtx) }
 
@@ -114,17 +138,41 @@ function urlForPaid(paid: boolean) {
   return paid ? `${appBase()}paid` : appBase()
 }
 
-function metricsFor(bp: BP) {
-  const pagePad = bp === 'sm' ? 16 : 24
-  const featW = bp === 'sm' ? 168 : bp === 'md' ? 208 : 262
-  const tablePad = pagePad
+function metricsFor(w: number) {
+  const bp = widthToBp(w)
+  // Progressive pads so 767→768 doesn't shrink the content column
+  const pagePad = bp === 'sm' ? 16 : bp === 'md' ? 20 : 24
+  const hasSidebar = bp === 'xl' || bp === 'lg'
+
+  // Real available width for the main column (include sidebar gap)
+  const contentW = bp === 'xl'
+    ? CONTENT_DESKTOP
+    : hasSidebar
+      ? Math.max(0, w - SIDEBAR_W - SIDEBAR_GAP - pagePad)
+      : Math.max(0, w - pagePad * 2)
+
+  const stackCards = contentW < CARD_ROW_MIN
+
+  // Sticky feature column — leave room for ≥1 plan card to peek
+  const featW =
+    bp === 'sm' ? Math.min(152, Math.max(120, Math.round(w * 0.36))) :
+    bp === 'md' ? Math.min(208, Math.max(160, Math.round(contentW * 0.26))) :
+    262
+
+  const planW =
+    bp === 'sm' ? 188 :
+    bp === 'md' ? 208 :
+    PLAN_W_DESKTOP
+
   return {
+    bp,
     featW,
-    planW: PLAN_W,
-    tablePad,
+    planW,
+    tablePad: pagePad,
     pagePad,
-    hasSidebar: bp === 'xl' || bp === 'lg',
-    stackCards: bp === 'sm' || bp === 'md',
+    contentW,
+    hasSidebar,
+    stackCards,
   }
 }
 
@@ -132,45 +180,45 @@ function metricsFor(bp: BP) {
 const COL_CHK = [ICO.chkGray, ICO.chkMain, ICO.chkWork, ICO.chkFam, ICO.chkGray]
 
 type V = boolean | 'base'
-interface Feat { id: string; label: string; isNew?: boolean; v: V[]; tip: string }
+interface Feat { id: string; label: string; isNew?: boolean; v: V[]; tip: string; tipPaid?: string }
 interface Sect { id: string; title: string; logo: string; rows: Feat[] }
 
 const DATA: Sect[] = [
   {
     id: 'cloud', title: 'Облако', logo: ICO.logoCloud,
     rows: [
-      { id: 'no-ads',      label: 'Без рекламы',                                                    v: [false, true,   true,   true,   false], tip: 'Облако без рекламных блоков — больше внимания вашим файлам.' },
-      { id: 'doc-edit',    label: 'Редактирование документов',                                      v: ['base',true,   true,   true,  'base'], tip: 'Редактируйте документы, хранящиеся в Облаке.' },
-      { id: 'autosave',    label: 'Автосохранение файлов с телефона в Облако',            v: ['base',true,   true,   true,  'base'], tip: 'Сохраняйте файлы с телефона в Облако автоматически.' },
-      { id: 'extra-space', label: 'Дополнительное место для файлов',                           v: [false, true,   true,   true,   false], tip: 'Больше пространства в Облаке для документов, фотографий и других файлов.' },
-      { id: 'upload-100',  label: 'Загрузка файлов до 100 ГБ в Облако',             v: [false, true,   true,   true,   false], tip: 'Загружайте в Облако файлы размером до 100 ГБ.' },
-      { id: 'timer',       label: 'Таймер для автоудаления отправленных папок',                v: [false, true,   true,   true,   false], tip: 'Папки вместе с содержимым удалятся у получателя через выбранное вами время.' },
-      { id: 'folder-dsgn', label: 'Выбор оформления для совместных папок',                    v: [false, true,   true,   true,   false], tip: 'Настройте оформление папки, которой делитесь по ссылке.' },
-      { id: 'folder-pass', label: 'Пароль для совместных папок\nв веб-версии',             v: [false, true,   true,   true,   false], tip: 'В веб-версии можно защитить совместную папку паролем.' },
-      { id: 'share-3',     label: 'Можно делиться местом ещё с 3 участниками',           v: [false, false,  false,  true,   false], tip: 'Делитесь пространством подписки ещё с тремя участниками.' },
-      { id: 'dedup',       label: 'Удаление дубликатов',        isNew: true,                       v: [false, true,   true,   true,   false], tip: 'Находите и удаляйте повторяющиеся файлы, чтобы освободить место.' },
-      { id: 'swipes',      label: 'Разбор фото свайпами',       isNew: true,                       v: [false, true,   true,   true,   false], tip: 'Разбирайте фотографии свайпами: выбирайте, что сохранить, а что удалить.' },
-      { id: 'fam-folders', label: 'Семейные папки с общим доступом', isNew: true,             v: [false, false,  false,  true,   false], tip: 'Храните семейные файлы в папках с общим доступом.' },
-      { id: 'fam-albums',  label: 'Семейные альбомы с общим доступом', isNew: true,           v: [false, false,  false,  true,   false], tip: 'Собирайте семейные фотографии в альбомах с общим доступом.' },
-      { id: 'fam-cal',     label: 'Семейный календарь',         isNew: true,                       v: [false, false,  false,  true,   false], tip: 'Планируйте семейные события в общем календаре.' },
-      { id: 'fam-docs',    label: 'Распознавание документов семьи', isNew: true,                   v: [false, false,  false,  true,   false], tip: 'Распознавайте текст на изображениях семейных документов.' },
-      { id: 'fam-unlim',   label: 'Безлимит и отключение рекламы у всех в подписке', isNew: true, v: [false, false, false, true, false], tip: 'Безлимит и отключение рекламы доступны всем участникам подписки.' },
+      { id: 'no-ads',      label: 'Без рекламы',                                                    v: [false, true,   true,   true,   false], tip: 'Ничего не будет отвлекать от писем и выдавать ваши планы', tipPaid: 'Ничего не будет отвлекать от писем и выдавать ваши планы' },
+      { id: 'doc-edit',    label: 'Редактирование документов',                                      v: ['base',true,   true,   true,  'base'], tip: 'Редактируйте сами, с коллегами или близкими. Например, ведите общий бюджет в таблице', tipPaid: 'Редактируйте сами, с коллегами или близкими. Например, ведите общий бюджет в таблице' },
+      { id: 'autosave',    label: 'Автосохранение файлов с телефона в Облако',            v: ['base',true,   true,   true,  'base'], tip: 'Фото и видео с телефона сами загрузятся в Облако — будет резервная копия, если с телефоном вдруг что-то случится', tipPaid: 'Фото и видео с телефона загрузятся в Облако, но место не займут' },
+      { id: 'extra-space', label: 'Дополнительное место для файлов',                           v: [false, true,   true,   true,   false], tip: 'Для файлов из Облака, писем и вложений из Почты', tipPaid: 'Для файлов из Облака, писем и вложений из Почты' },
+      { id: 'upload-100',  label: 'Загрузка файлов до 100 ГБ в Облако',             v: [false, true,   true,   true,   false], tip: 'Можно загрузить в Облако тяжёлый файл. Например, архив с фотографиями и видео', tipPaid: 'Можно загрузить в Облако тяжёлый файл. Например, архив с фотографиями и видео' },
+      { id: 'timer',       label: 'Таймер для автоудаления отправленных папок',                v: [false, true,   true,   true,   false], tip: 'У адресата будет время посмотреть файлы, а потом они автоматически удалятся и освободят место', tipPaid: 'У адресата будет время посмотреть файлы, а потом они автоматически удалятся и освободят место' },
+      { id: 'folder-dsgn', label: 'Выбор оформления для совместных папок',                    v: [false, true,   true,   true,   false], tip: 'Устанавливайте фоны — будет легче различать папки, которыми делитесь с коллегами или друзьями', tipPaid: 'Устанавливайте фоны — будет легче различать папки, которыми делитесь с коллегами или друзьями' },
+      { id: 'folder-pass', label: 'Пароль для совместных папок\nв веб-версии',             v: [false, true,   true,   true,   false], tip: 'Скроете файлы от посторонних глаз', tipPaid: 'Скроете файлы от посторонних глаз' },
+      { id: 'share-3',     label: 'Можно делиться местом ещё с 3 участниками',           v: [false, false,  false,  true,   false], tip: 'Можно сделать подарок близким или разделить оплату и экономить', tipPaid: 'Можно сделать подарок близким или разделить оплату и экономить' },
+      { id: 'dedup',       label: 'Удаление дубликатов',        isNew: true,                       v: [false, true,   true,   true,   false], tip: 'Нейросеть поможет освободить место: подскажет, какие фото удалить, а какие оставить', tipPaid: 'Нейросеть поможет освободить место: подскажет, какие фото удалить, а какие оставить' },
+      { id: 'swipes',      label: 'Разбор фото свайпами',       isNew: true,                       v: [false, true,   true,   true,   false], tip: 'Быстро наведёте порядок в Облаке, смахивая фото вправо и влево', tipPaid: 'Быстро наведёте порядок в Облаке, смахивая фото вправо и влево' },
+      { id: 'fam-folders', label: 'Семейные папки с общим доступом', isNew: true,             v: [false, false,  false,  true,   false], tip: 'Сканы документов, билеты в театр, таблицы с бюджетом на отпуск — пусть всё нужное лежит в семейных папках', tipPaid: 'Сканы документов, билеты в театр, таблицы с бюджетом на отпуск — пусть всё нужное лежит в семейных папках' },
+      { id: 'fam-albums',  label: 'Семейные альбомы с общим доступом', isNew: true,           v: [false, false,  false,  true,   false], tip: 'Семейные альбомы смогут обновлять все близкие — будет много фото радостного события от каждого', tipPaid: 'Семейные альбомы смогут обновлять все близкие — будет много фото радостного события от каждого' },
+      { id: 'fam-cal',     label: 'Семейный календарь',         isNew: true,                       v: [false, false,  false,  true,   false], tip: 'Добавляйте события — они появятся у всех в подписке. Будет проще планировать общие дела', tipPaid: 'Добавляйте события — они появятся у всех в подписке. Будет проще планировать общие дела' },
+      { id: 'fam-docs',    label: 'Распознавание документов семьи', isNew: true,                   v: [false, false,  false,  true,   false], tip: 'Справки для школы, документы для визы — нейросеть распознает их и перенесёт в отдельную папку', tipPaid: 'Справки для школы, документы для визы — нейросеть распознает их и перенесёт в отдельную папку' },
+      { id: 'fam-unlim',   label: 'Безлимит и отключение рекламы у всех в подписке', isNew: true, v: [false, false, false, true, false], tip: 'Фото и видео с телефона загрузятся в личную папку каждого участника и не займут место в Облаке', tipPaid: 'Фото и видео с телефона загрузятся в личную папку каждого участника и не займут место в Облаке' },
     ]
   },
   {
     id: 'mail', title: 'Почта', logo: ICO.logoMail,
     rows: [
-      { id: 'mail-space',  label: 'Дополнительное место для писем',                      v: [false, true,   true,   true,   true],  tip: 'Больше места для хранения писем и вложений в Почте.' },
-      { id: 'antivirus',   label: 'Проверка вложений антивирусов',                       v: ['base',true,   true,   true,  'base'], tip: 'Вложения проверяются антивирусом на наличие угроз.' },
-      { id: 'mail-noad',   label: 'Без рекламы',                                          v: [false, true,   true,   true,   false], tip: 'Пользуйтесь Почтой без рекламных блоков.' },
-      { id: 'attach-100',  label: 'Отправка вложений до 100 ГБ в письмах',               v: [false, true,   true,   false,  false], tip: 'Отправляйте в письмах вложения размером до 100 ГБ.' },
-      { id: 'widgets',     label: 'Полезные виджеты Календаря и Задач всегда на виду',   v: [false, false,  true,   false,  false], tip: 'Держите события Календаря и задачи на виду в интерфейсе Почты.' },
-      { id: 'undo',        label: 'Отмена отправки писем в течение 20 секунд',            v: [false, false,  true,   false,  false], tip: 'Передумали отправлять письмо? Отмените отправку в течение 20 секунд.' },
-      { id: 'read-rcpt',   label: 'Уведомления о прочтении ваших писем',                 v: [false, false,  true,   false,  false], tip: 'Получайте уведомления о прочтении отправленных писем.' },
-      { id: 'address',     label: 'Красивый адрес',              isNew: true,            v: [false, false,  true,   false,  false], tip: 'Используйте красивый адрес для вашей почты.' },
-      { id: 'ai-style',    label: 'Генерация и изменение стиля писем', isNew: true,      v: [false, false,  true,   false,  false], tip: 'Создавайте черновики писем и меняйте стиль текста с помощью нейросети.' },
-      { id: 'ai-sum',      label: 'Краткий пересказ писем',      isNew: true,            v: [false, false,  true,   false,  false], tip: 'Получайте краткое содержание письма, чтобы быстрее понять главное.' },
-      { id: 'ai-asst',     label: 'Нейропомощник',               isNew: true,            v: [false, false,  true,   false,  false], tip: 'Используйте нейропомощника для работы с письмами.' },
+      { id: 'mail-space',  label: 'Дополнительное место для писем',                      v: [false, true,   true,   true,   true],  tip: 'Для файлов из Облака, писем и вложений из Почты', tipPaid: 'Для файлов из Облака, писем и вложений из Почты' },
+      { id: 'antivirus',   label: 'Проверка вложений антивирусов',                       v: ['base',true,   true,   true,  'base'], tip: 'Письма и файлы в Почте и Облаке проверяются антивирусом Dr.Web', tipPaid: 'Письма и файлы в Почте и Облаке проверяются антивирусом Dr.Web' },
+      { id: 'mail-noad',   label: 'Без рекламы',                                          v: [false, true,   true,   true,   false], tip: 'Ничего не будет отвлекать от писем и выдавать ваши планы', tipPaid: 'Ничего не будет отвлекать от писем и выдавать ваши планы' },
+      { id: 'attach-100',  label: 'Отправка вложений до 100 ГБ в письмах',               v: [false, true,   true,   false,  false], tip: 'К письму можно прикрепить тяжёлое вложение. Например, квартальный отчёт', tipPaid: 'К письму можно прикрепить тяжёлое вложение. Например, квартальный отчёт' },
+      { id: 'widgets',     label: 'Полезные виджеты Календаря и Задач всегда на виду',   v: [false, false,  true,   false,  false], tip: 'Держите события Календаря и задачи на виду в интерфейсе Почты.' },
+      { id: 'undo',        label: 'Отмена отправки писем в течение 20 секунд',            v: [false, false,  true,   false,  false], tip: 'Если вдруг отправили письмо не тому человеку или забыли прикрепить файл', tipPaid: 'Если вдруг отправили письмо не тому человеку или забыли прикрепить файл' },
+      { id: 'read-rcpt',   label: 'Уведомления о прочтении ваших писем',                 v: [false, false,  true,   false,  false], tip: 'Не нужно будет уточнять у адресата, получил он письмо или нет', tipPaid: 'Не нужно будет уточнять у адресата, получил он письмо или нет' },
+      { id: 'address',     label: 'Красивый адрес',              isNew: true,            v: [false, false,  true,   false,  false], tip: 'Сможете выбрать дополнительный адрес к основному и отразить своё дело. Например, olgarealtor@mail.ru', tipPaid: 'Сможете выбрать дополнительный адрес к основному и отразить своё дело. Например, olgarealtor@mail.ru' },
+      { id: 'ai-style',    label: 'Генерация и изменение стиля писем', isNew: true,      v: [false, false,  true,   false,  false], tip: 'Делегируете мелочи нейросети. Она напишет за вас письмо или поправит тон уже готового. Например, на деловой', tipPaid: 'Делегируете мелочи нейросети. Она напишет за вас письмо или поправит тон уже готового. Например, на деловой' },
+      { id: 'ai-sum',      label: 'Краткий пересказ писем',      isNew: true,            v: [false, false,  true,   false,  false], tip: 'Нейросеть раскроет суть письма в одном абзаце — пригодится, когда нет времени читать большие письма', tipPaid: 'Нейросеть раскроет суть письма в одном абзаце — пригодится, когда нет времени читать большие письма' },
+      { id: 'ai-asst',     label: 'Нейропомощник',               isNew: true,            v: [false, false,  true,   false,  false], tip: 'Нейросеть перескажет важные письма в одной строке и поднимет их над списком писем, чтобы вы ничего не пропустили', tipPaid: 'Нейросеть перескажет важные письма в одной строке и поднимет их над списком писем, чтобы вы ничего не пропустили' },
     ]
   }
 ]
@@ -186,14 +234,14 @@ interface PlanDef {
 const PLANS: PlanDef[] = [
   {
     id: 'free', name: 'Бесплатный', cname: 'Бесплатно',
-    sub: '8 ГБ в едином пространстве Облака и Почты',
+    sub: '8 ГБ в едином пространстве Почты и Облака',
     bg: 'white', border: '1px solid rgba(0,16,61,0.08)',
     isCurrent: true,
   },
   {
     id: 'main', name: 'Основной',
     sub: 'Больше места и возможностей', bg: '#f0f7ff',
-    price: 'от 87 ₽', disc: 'до — 79%',
+    price: 'от 87 ₽', disc: 'до −79%',
     bullets: [
       { ico: ICO.phone,   txt: 'Безлимит для фото с телефона' },
       { ico: ICO.copy,    txt: 'Удаление дубликатов' },
@@ -261,6 +309,369 @@ function usePlans() {
   }
 }
 
+type BuyIco = 'infinity' | 'done' | 'cross' | 'stars'
+interface BuySize {
+  amount: string
+  unit: 'ГБ' | 'ТБ'
+  volume: string
+  yearPrice: number
+  disc: string
+  discPct: number
+  featured?: boolean
+}
+interface BuyModalDef {
+  title1: string
+  title2: string
+  features: { ico: BuyIco; txt: string; accent?: boolean; off?: boolean }[]
+  sizes: BuySize[]
+}
+
+const BUY_ICO: Record<BuyIco, string> = {
+  infinity: BUY.infinity,
+  done: BUY.done,
+  cross: BUY.cross,
+  stars: BUY.stars,
+}
+
+const BUY_MODALS: Record<string, BuyModalDef> = {
+  main: {
+    title1: 'Больше возможностей с тарифом',
+    title2: 'Mail Space основной',
+    features: [
+      { ico: 'infinity', txt: 'Безлимит для фото с телефона', accent: true },
+      { ico: 'done', txt: 'Без рекламы в Почте и Облаке' },
+      { ico: 'done', txt: 'Удаление дубликатов' },
+      { ico: 'done', txt: 'Загрузка файлов до 100 ГБ' },
+    ],
+    sizes: [
+      { amount: '+512', unit: 'ГБ', volume: 'Ваш объём составит 520 ГБ', yearPrice: 83, disc: '−74%', discPct: 74 },
+      { amount: '+1', unit: 'ТБ', volume: 'Ваш объём составит 1.01 ТБ', yearPrice: 91, disc: '−74%', discPct: 74, featured: true },
+      { amount: '+2', unit: 'ТБ', volume: 'Ваш объём составит 2.01 ТБ', yearPrice: 158, disc: '−72%', discPct: 72 },
+    ],
+  },
+  work: {
+    title1: 'Больше возможностей с тарифом',
+    title2: 'Mail Space для работы',
+    features: [
+      { ico: 'stars', txt: 'Генерация и изменение писем', accent: true },
+      { ico: 'done', txt: 'Без рекламы в Почте и Облаке' },
+      { ico: 'done', txt: 'Уведомление о прочтении' },
+      { ico: 'done', txt: 'Отмена отправки писем' },
+    ],
+    sizes: [
+      { amount: '+512', unit: 'ГБ', volume: 'Ваш объём составит 520 ГБ', yearPrice: 149, disc: '−73%', discPct: 73 },
+      { amount: '+1', unit: 'ТБ', volume: 'Ваш объём составит 1.01 ТБ', yearPrice: 166, disc: '−72%', discPct: 72, featured: true },
+      { amount: '+2', unit: 'ТБ', volume: 'Ваш объём составит 2.01 ТБ', yearPrice: 274, disc: '−73%', discPct: 73 },
+    ],
+  },
+  family: {
+    title1: 'Больше возможностей с тарифом',
+    title2: 'Mail Space семейный',
+    features: [
+      { ico: 'infinity', txt: 'Семейный безлимит', accent: true },
+      { ico: 'done', txt: 'Без рекламы в Почте и Облаке' },
+      { ico: 'done', txt: 'Добавление ещё 3 участников' },
+      { ico: 'done', txt: 'Семейные папки и альбомы' },
+    ],
+    sizes: [
+      { amount: '+512', unit: 'ГБ', volume: 'Ваш объём составит 520 ГБ', yearPrice: 132, disc: '−73%', discPct: 73 },
+      { amount: '+1', unit: 'ТБ', volume: 'Ваш объём составит 1.01 ТБ', yearPrice: 108, disc: '−74%', discPct: 74, featured: true },
+      { amount: '+2', unit: 'ТБ', volume: 'Ваш объём составит 2.01 ТБ', yearPrice: 249, disc: '−73%', discPct: 73 },
+    ],
+  },
+  minimal: {
+    title1: 'Увеличить место с тарифом',
+    title2: 'Mail Space минимальный',
+    features: [
+      { ico: 'infinity', txt: 'Безлимит для фото с телефона', accent: true },
+      { ico: 'cross', txt: 'Без рекламы в Почте и Облаке', off: true },
+      { ico: 'cross', txt: 'Удаление дубликатов', off: true },
+      { ico: 'cross', txt: 'Загрузка файлов до 100 ГБ', off: true },
+    ],
+    sizes: [
+      { amount: '+2', unit: 'ТБ', volume: 'Ваш объём составит 2.01 ТБ', yearPrice: 158, disc: '−77%', discPct: 77 },
+      { amount: '+1', unit: 'ТБ', volume: 'Ваш объём составит 1.01 ТБ', yearPrice: 87, disc: '−78%', discPct: 78, featured: true },
+      { amount: '+4', unit: 'ТБ', volume: 'Ваш объём составит 4.01 ТБ', yearPrice: 271, disc: '−78%', discPct: 78 },
+    ],
+  },
+}
+
+function rubMonth(n: number) {
+  return `${n}\u00a0₽ в\u00a0месяц`
+}
+
+function BuyTariffModal({ planId, onClose }: { planId: string; onClose: () => void }) {
+  const def = BUY_MODALS[planId]
+  const [period, setPeriod] = useState<'month' | 'year'>('year')
+  const { bp } = useLayout()
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  if (!def) return null
+
+  const yearOn = period === 'year'
+  const modalW = bp === 'sm' ? Math.min(840, (typeof window !== 'undefined' ? window.innerWidth : 840) - 24) : 840
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0, 16, 61, 0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: bp === 'sm' ? 12 : 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          width: modalW,
+          height: bp === 'sm' ? undefined : 669,
+          maxWidth: '100%',
+          maxHeight: 'calc(100vh - 24px)',
+          overflow: bp === 'sm' ? 'auto' : 'hidden',
+          background: '#f3f3f5',
+          borderRadius: 12,
+          boxSizing: 'border-box',
+          boxShadow: '0 10px 36px rgba(0,16,61,0.08), 0 6px 20px rgba(0,16,61,0.06), 0 6px 12px rgba(0,16,61,0.06)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Закрыть"
+          style={{
+            position: 'absolute', top: 8, right: 8,
+            width: 40, height: 40, border: 'none', background: 'transparent',
+            borderRadius: 8, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 0,
+          }}
+        >
+          <img src={BUY.close} alt="" style={{ width: 16, height: 16 }} />
+        </button>
+
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32,
+          paddingTop: 40, width: '100%',
+        }}>
+          <div style={{ width: '100%', maxWidth: 712, height: 76, textAlign: 'center' }}>
+            <p style={{
+              margin: 0,
+              fontFamily: "var(--fontfamilyaccent)",
+              fontSize: bp === 'sm' ? 24 : 32,
+              lineHeight: bp === 'sm' ? '30px' : '38px',
+              color: '#2c2d2e', fontWeight: 500,
+            }}>
+              {def.title1}<br />{def.title2}
+            </p>
+          </div>
+
+          <div style={{
+            position: 'relative', width: 212, height: 48, flexShrink: 0,
+            background: 'rgba(71,71,71,0.06)', borderRadius: 40,
+          }}>
+            <button
+              type="button"
+              onClick={() => setPeriod('month')}
+              style={{
+                position: 'absolute', left: 4, top: 4,
+                width: 102, height: 40, borderRadius: 40, border: 'none',
+                background: yearOn ? 'transparent' : 'white',
+                cursor: 'pointer',
+                fontFamily: "var(--fontfamilyaccent)",
+                fontSize: 12, lineHeight: '16px',
+                color: yearOn ? '#87898f' : '#2c2d2e',
+              }}
+            >
+              На месяц
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('year')}
+              style={{
+                position: 'absolute', right: 4, top: 4,
+                width: 102, height: 40, borderRadius: 40, border: 'none',
+                background: yearOn ? 'white' : 'transparent',
+                cursor: 'pointer',
+                fontFamily: "var(--fontfamilyaccent)",
+                fontSize: 12, lineHeight: '16px',
+                color: yearOn ? '#2c2d2e' : '#87898f',
+              }}
+            >
+              На год
+            </button>
+            {yearOn && (
+              <img
+                src={BUY.pct}
+                alt=""
+                style={{
+                  position: 'absolute', width: 38.5, height: 38.5,
+                  right: -14, top: -18,
+                  transform: 'rotate(-47deg)',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex', gap: 12, justifyContent: 'center',
+          marginTop: 24, padding: '0 24px 20px',
+        }}>
+          {def.sizes.map(size => {
+            const featured = !!size.featured
+            const price = yearOn
+              ? size.yearPrice
+              : Math.round(size.yearPrice / (1 - size.discPct / 100))
+            return (
+              <div
+                key={size.amount + size.unit}
+                style={{
+                  width: 256, flexShrink: 0,
+                  height: 429,
+                  background: 'white',
+                  borderRadius: 21,
+                  boxSizing: 'border-box',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  boxShadow: featured ? 'inset 0 0 0 2.5px #0077ff' : undefined,
+                }}
+              >
+                <div style={{ height: 35, width: '100%', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                  {featured && (
+                    <div style={{
+                      height: 35,
+                      background: 'rgba(0,119,255,0.18)',
+                      borderRadius: '0 18px 0 21px',
+                      padding: '0 21px',
+                      display: 'flex', alignItems: 'center',
+                    }}>
+                      <span style={{
+                        fontFamily: "var(--fontfamilyaccent)",
+                        fontSize: 14, lineHeight: '16px', color: '#0070f0',
+                      }}>Выгодно</span>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{
+                  display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'center',
+                  height: 110, padding: '18px 21px 19px', boxSizing: 'border-box',
+                  width: '100%', flexShrink: 0, overflow: 'hidden',
+                }}>
+                  <span style={{
+                    fontFamily: "var(--fontfamilyaccent)",
+                    fontSize: 52, lineHeight: '73px', color: '#2c2d2e',
+                    fontWeight: 500,
+                  }}>{size.amount}</span>
+                  <span style={{
+                    fontFamily: "'VK Sans Display:DemiBold', 'VK Sans Display', sans-serif",
+                    fontSize: 28, lineHeight: '36px', color: '#2c2d2e',
+                    paddingTop: 10, fontWeight: 600,
+                  }}>{size.unit}</span>
+                </div>
+
+                <div style={{
+                  padding: '0 9px 24px', width: '100%', boxSizing: 'border-box',
+                  display: 'flex', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    height: 28, width: 211,
+                    background: 'rgba(0,16,61,0.08)', borderRadius: 11,
+                    padding: '5px 7px', boxSizing: 'border-box',
+                  }}>
+                    <img src={BUY.cloud} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                    <span style={{
+                      fontFamily: "var(--fontfamilyaccent)",
+                      fontSize: 12, lineHeight: '16px', letterSpacing: 0.24, color: '#2c2d2e',
+                      whiteSpace: 'nowrap',
+                    }}>{size.volume}</span>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 16,
+                  padding: '0 12px 20px', width: '100%', boxSizing: 'border-box',
+                  flexShrink: 0,
+                }}>
+                  {def.features.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 4, alignItems: 'flex-start', width: '100%' }}>
+                      <div style={{
+                        width: 18, height: 18, padding: 1, boxSizing: 'border-box',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <img src={BUY_ICO[f.ico]} alt="" style={{ width: 16, height: 16, display: 'block' }} />
+                      </div>
+                      <span style={{
+                        fontFamily: "'VK Sans Display:Regular', 'VK Sans Display', sans-serif",
+                        fontSize: 14, lineHeight: '18px',
+                        color: f.off ? '#87898f' : f.accent ? '#0070f0' : '#2c2d2e',
+                        flex: 1, minWidth: 0,
+                      }}>{f.txt}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{
+                  marginTop: 'auto', padding: 12, width: '100%', boxSizing: 'border-box',
+                  display: 'flex', alignItems: 'flex-end',
+                }}>
+                  <button
+                    type="button"
+                    style={{
+                      position: 'relative',
+                      width: '100%', height: 68, overflow: 'hidden',
+                      border: 'none', borderRadius: 16, cursor: 'pointer',
+                      background: featured ? '#0077ff' : '#ebf2ff',
+                      color: featured ? 'white' : '#0070f0',
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center',
+                      padding: yearOn ? '10px 24px' : '0 24px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <span style={{
+                      fontFamily: "var(--fontfamilyaccent)",
+                      fontSize: 16, lineHeight: '20px',
+                    }}>{rubMonth(price)}</span>
+                    {yearOn && (
+                      <span style={{
+                        fontFamily: "'VK Sans Display:Regular', 'VK Sans Display', sans-serif",
+                        fontSize: 12, lineHeight: '16px',
+                      }}>при покупке на год</span>
+                    )}
+                    {yearOn && (
+                      <span style={{
+                        position: 'absolute', top: 0, right: 0,
+                        background: featured ? '#2c2d2e' : '#0077ff',
+                        color: 'white',
+                        fontFamily: "var(--fontfamilybase)",
+                        fontSize: 11, lineHeight: '14px',
+                        padding: '5px 12px 3px',
+                        borderRadius: '0 16px 0 16px',
+                      }}>{size.disc}</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 // ── Table sub-components ─────────────────────────────────────────────────────
 
 function NewBadge() {
@@ -281,7 +692,7 @@ function NewBadge() {
 interface TipState { x: number; y: number; text: string }
 
 function FeatureRow({ feat }: { feat: Feat }) {
-  const { featW, planW, tablePad, bp } = useLayout()
+  const { featW, planW, tablePad, bp, paid } = useLayout()
   const { plans, mapV, chks } = usePlans()
   const [hovered, setHovered] = useState(false)
   const [tip, setTip] = useState<TipState | null>(null)
@@ -292,7 +703,7 @@ function FeatureRow({ feat }: { feat: Feat }) {
     if (!btnRef.current) return
     const r = btnRef.current.getBoundingClientRect()
     const x = Math.min(Math.max(r.left + r.width / 2, 128), window.innerWidth - 128)
-    setTip({ x, y: r.top, text: feat.tip })
+    setTip({ x, y: r.top, text: paid && feat.tipPaid ? feat.tipPaid : feat.tip })
   }
 
   const hoverBg = hovered ? 'rgba(0,0,0,0.042)' : 'transparent'
@@ -371,7 +782,7 @@ function FeatureRow({ feat }: { feat: Feat }) {
           position: 'fixed',
           left: tip.x, top: tip.y - 10,
           transform: 'translate(-50%, -100%)',
-          zIndex: 9999, maxWidth: 240,
+          zIndex: 9999, maxWidth: 280,
           background: '#2c2d2e', color: 'white',
           borderRadius: 12, padding: '8px 12px',
           fontSize: 12, lineHeight: '16px',
@@ -396,8 +807,9 @@ function FeatureRow({ feat }: { feat: Feat }) {
 }
 
 function PlanCard({ plan, compact }: { plan: PlanDef; compact: boolean }) {
-  const { planW, paid } = useLayout()
+  const { planW, paid, setBuyPlanId } = useLayout()
   const currentPaid = paid && plan.isCurrent
+  const openBuy = () => { if (plan.price) setBuyPlanId(plan.id) }
   const hideSub = paid
   const TR = 'max-height 260ms ease-out, opacity 220ms ease-out'
   const show = (visible: boolean, maxH: number) => ({
@@ -428,7 +840,7 @@ function PlanCard({ plan, compact }: { plan: PlanDef; compact: boolean }) {
       padding: compact ? '12px 20px' : '16px 20px 20px',
       display: 'flex', flexDirection: 'column',
       justifyContent: compact ? 'flex-start' : 'space-between',
-      minHeight: compact ? 72 : 242,
+      minHeight: compact ? (plan.price ? 72 : 88) : 242,
       transition: 'padding 260ms ease-out, min-height 260ms ease-out',
       overflow: 'hidden', boxSizing: 'border-box',
       position: 'relative',
@@ -443,7 +855,7 @@ function PlanCard({ plan, compact }: { plan: PlanDef; compact: boolean }) {
       <div>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          marginBottom: compact ? 0 : 8,
+          marginBottom: compact && plan.price ? 0 : 8,
           paddingRight: plan.isCurrent && !compact ? 72 : 0,
           transition: 'margin-bottom 260ms ease-out',
         }}>
@@ -458,7 +870,7 @@ function PlanCard({ plan, compact }: { plan: PlanDef; compact: boolean }) {
         </div>
 
         {plan.sub && !hideSub && (
-          <div style={{ ...show(!compact, 40), marginBottom: plan.bullets ? 8 : 0, transition: TR + ', margin-bottom 260ms ease-out' }}>
+          <div style={{ ...show(!compact || !plan.price, 40), marginBottom: plan.bullets ? 8 : 0, transition: TR + ', margin-bottom 260ms ease-out' }}>
             <p style={{
               fontFamily: "var(--fontfamilybase)",
               fontSize: 12, lineHeight: '16px',
@@ -487,7 +899,10 @@ function PlanCard({ plan, compact }: { plan: PlanDef; compact: boolean }) {
 
       {plan.price && (
         <div style={{ position: 'relative', marginTop: compact ? 8 : 24, alignSelf: 'flex-start' }}>
-          <button style={{
+          <button
+              type="button"
+              onClick={openBuy}
+              style={{
                 width: 'fit-content', height: 36,
                 background: currentPaid ? '#f0f1f3' : '#0077ff',
                 color: currentPaid ? '#2c2d2e' : 'white',
@@ -525,9 +940,9 @@ function TableHeader({ compact, plansRef, canLeft, canRight }: {
   canLeft: boolean
   canRight: boolean
 }) {
-  const { featW, tablePad, bp, paid } = useLayout()
+  const { featW, tablePad, bp, paid, contentW } = useLayout()
   const { plans } = usePlans()
-  const tightHead = compact || bp === 'sm' || bp === 'md'
+  const tightHead = compact || bp === 'sm' || contentW < 720
   const padY = tightHead ? (bp === 'sm' ? 12 : 16) : 24
   const headSize = bp === 'sm' ? 15 : 17
   const headLh = bp === 'sm' ? '20px' : '22px'
@@ -625,14 +1040,16 @@ function TableHeader({ compact, plansRef, canLeft, canRight }: {
 // ── Page layout components ───────────────────────────────────────────────────
 
 function PortalMenu() {
-  const { bp, pagePad, hasSidebar } = useLayout()
+  const { bp, w, pagePad, hasSidebar } = useLayout()
   const S = { fontFamily: "var(--fontfamilybase)", fontSize: 13, color: '#2c2d2e', whiteSpace: 'nowrap' as const }
   const links =
     bp === 'xl' ? ['Облако', 'Однокласники', 'ВКонтакте', 'Новости', 'Знакомства', 'Игры'] :
     bp === 'lg' ? ['Облако', 'ВКонтакте', 'Новости'] :
+    bp === 'md' && w >= 960 ? ['Облако', 'ВКонтакте'] :
+    bp === 'md' ? ['Облако'] :
     ['Облако']
   const showAll = bp === 'xl' || bp === 'lg'
-  const showEmail = bp !== 'sm'
+  const showEmail = w >= 960
   const padX = hasSidebar ? 20 : pagePad
 
   return (
@@ -668,7 +1085,7 @@ function PortalMenu() {
         </div>
         {showEmail && (
           <>
-            <span style={S}>a.oleynichenko@vk.team</span>
+            <span style={S}>user@mail.ru</span>
             <img src={PG.dropdown} alt="" style={{ width: 16, height: 16 }} />
           </>
         )}
@@ -686,27 +1103,28 @@ function MenuIcon() {
 }
 
 function ModeToggle() {
-  const { paid, setPaid, bp } = useLayout()
-  const compact = bp === 'sm'
+  const { paid, setPaid, bp, w } = useLayout()
+  const compact = bp === 'sm' || w < 900
+  const tiny = w < 380
   return (
     <div style={{
-      background: 'white', borderRadius: 10, padding: 3,
-      display: 'flex', gap: 2, flexShrink: 0,
+      background: 'white', borderRadius: 10, padding: tiny ? 2 : 3,
+      display: 'flex', gap: 2, flexShrink: 0, maxWidth: '100%',
     }}>
       {([
-        { v: false, l: 'Без подписки' },
-        { v: true,  l: 'С подпиской' },
+        { v: false, l: tiny ? 'Без' : 'Без подписки' },
+        { v: true,  l: tiny ? 'С' : 'С подпиской' },
       ] as const).map(o => (
         <button
-          key={o.l + String(o.v)}
+          key={String(o.v)}
           type="button"
           onClick={() => setPaid(o.v)}
           style={{
-            border: 'none', borderRadius: 8, padding: compact ? '5px 8px' : '6px 10px',
+            border: 'none', borderRadius: 8, padding: tiny ? '4px 6px' : compact ? '5px 8px' : '6px 10px',
             background: paid === o.v ? '#07f' : 'transparent',
             color: paid === o.v ? 'white' : '#2c2d2e',
             fontFamily: "var(--fontfamilyaccent)",
-            fontSize: compact ? 12 : 13, lineHeight: '16px', cursor: 'pointer',
+            fontSize: tiny ? 11 : compact ? 12 : 13, lineHeight: '16px', cursor: 'pointer',
             whiteSpace: 'nowrap',
           }}
         >
@@ -718,16 +1136,16 @@ function ModeToggle() {
 }
 
 function HeadBar() {
-  const { pagePad, hasSidebar, menuOpen, setMenuOpen } = useLayout()
+  const { pagePad, hasSidebar, menuOpen, setMenuOpen, bp } = useLayout()
   return (
     <div style={{
       height: 56, background: '#f6f7f8',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       paddingLeft: hasSidebar ? 76 : pagePad,
-      paddingRight: hasSidebar ? 20 : pagePad, gap: 8,
-      flexShrink: 0, position: 'relative', zIndex: 60,
+      paddingRight: hasSidebar ? 20 : pagePad, gap: bp === 'sm' ? 6 : 8,
+      flexShrink: 0, position: 'relative', zIndex: 60, minWidth: 0,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
         {!hasSidebar && (
           <button
             aria-label={menuOpen ? 'Закрыть меню' : 'Открыть меню'}
@@ -735,13 +1153,13 @@ function HeadBar() {
             style={{
               width: 32, height: 32, border: 'none', background: 'transparent',
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: 0, borderRadius: 8, marginLeft: -6,
+              padding: 0, borderRadius: 8, marginLeft: -6, flexShrink: 0,
             }}
           >
             <MenuIcon />
           </button>
         )}
-        <img src={PG.mailLogo} alt="Mail" style={{ height: 30, width: 93 }} />
+        <img src={PG.mailLogo} alt="Mail" style={{ height: 30, width: 93, flexShrink: 0 }} />
       </div>
       <ModeToggle />
     </div>
@@ -759,17 +1177,17 @@ function Sidebar() {
     { label: 'Все настройки',     active: false, arrow: true  },
   ]
   return (
-    <div style={{ width: 264, flexShrink: 0, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 24, position: 'sticky', top: 0, alignSelf: 'flex-start' }}>
+    <div style={{ width: SIDEBAR_W, flexShrink: 0, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 24, position: 'sticky', top: 0, alignSelf: 'flex-start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 56, height: 56, borderRadius: 48, overflow: 'hidden' }}>
           <img src={PG.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <div style={{ textAlign: 'center', width: '100%' }}>
           <div style={{ fontFamily: "var(--fontfamilyaccent)", fontSize: 20, lineHeight: '24px', color: '#2c2d2e' }}>
-            Ася Олейниченко
+            Пользователь
           </div>
           <div style={{ fontFamily: "var(--fontfamilybase)", fontSize: 15, lineHeight: '20px', color: '#87898f' }}>
-            a.oleynichenko@vk.team
+            user@mail.ru
           </div>
         </div>
       </div>
@@ -798,13 +1216,13 @@ function Sidebar() {
 }
 
 function StorageCard() {
-  const { bp, stackCards, paid, pagePad } = useLayout()
-  const fill = bp === 'lg' || stackCards
+  const { stackCards, paid, pagePad } = useLayout()
   return (
     <div style={{
       background: 'white', borderRadius: 20, padding: pagePad,
-      width: fill ? '100%' : 600, flex: fill && !stackCards ? 1.63 : undefined,
-      minWidth: 0, flexShrink: stackCards ? 1 : 0,
+      width: stackCards ? '100%' : undefined,
+      flex: stackCards ? undefined : '1.63 1 0',
+      minWidth: 0, flexShrink: 1,
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       gap: 32, boxSizing: 'border-box',
     }}>
@@ -814,14 +1232,27 @@ function StorageCard() {
             {paid ? 'Занято 4.5 ГБ из 584 ГБ' : 'Занято 4.5 ГБ из 8 ГБ'}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            {[PG.storageAva, PG.avatarSvg1, PG.avatarSvg2].map((src, i) => (
+            {([
+              { bg: PG.storageAva, icon: null },
+              { bg: PG.avatarSvg1, icon: PG.avatarUser },
+              { bg: PG.avatarSvg2, icon: PG.avatarUser },
+            ] as const).map((a, i) => (
               <div key={i} style={{
                 width: 30, height: 32, marginRight: -6,
-                border: '2px solid white', borderRadius: '50%',
+                borderRadius: '50%',
                 overflow: 'hidden', position: 'relative', zIndex: 3 - i,
-                background: '#eee',
+                boxShadow: '0 0 0 2px white',
+                background: '#f6f7f8',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={a.bg} alt="" style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+                }} />
+                {a.icon && (
+                  <img src={a.icon} alt="" style={{
+                    position: 'relative', zIndex: 1, width: 16, height: 16, display: 'block',
+                  }} />
+                )}
               </div>
             ))}
             <div style={{ width: 32, height: 32, flexShrink: 0 }}>
@@ -865,8 +1296,7 @@ function StorageCard() {
 }
 
 function ActionsCard() {
-  const { bp, stackCards, paid } = useLayout()
-  const fill = bp === 'lg' || stackCards
+  const { stackCards, paid } = useLayout()
   const actions = [
     { icon: PG.promoIcon, label: 'Активация промокода' },
     { icon: PG.histIcon,  label: 'История платежей', sub: paid ? 'Следующий платёж 18 мая 2026' : undefined },
@@ -876,8 +1306,10 @@ function ActionsCard() {
   return (
     <div style={{
       background: 'white', borderRadius: 20, padding: 8,
-      width: fill ? '100%' : 368, flex: fill && !stackCards ? 1 : undefined,
-      minWidth: 0, flexShrink: stackCards ? 1 : 0, boxSizing: 'border-box',
+      width: stackCards ? '100%' : undefined,
+      flex: stackCards ? undefined : '1 1 0',
+      minWidth: stackCards ? 0 : 260,
+      flexShrink: 1, boxSizing: 'border-box',
       display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       {actions.map(a => (
@@ -912,12 +1344,15 @@ function ActionsCard() {
 }
 
 function ActiveTariffsCard() {
-  const { bp, paid, pagePad } = useLayout()
-  const tile = bp === 'sm'
-    ? { width: '100%' as const, flex: '1 1 100%' }
-    : bp === 'md'
-    ? { flex: '1 1 280px', minWidth: 0, maxWidth: '100%' as const }
-    : { width: 306, flexShrink: 0 as const, height: 92 }
+  const { bp, paid, pagePad, contentW } = useLayout()
+  // Inner width of the white card ≈ contentW - pagePad*2... but on xl content is 992
+  const innerW = Math.max(0, contentW - pagePad * 2)
+  const tile =
+    bp === 'sm' || innerW < 640
+      ? { width: '100%' as const, flex: '1 1 100%' }
+      : innerW < 940
+        ? { flex: '1 1 280px', minWidth: 0, maxWidth: '100%' as const }
+        : { width: 306, flexShrink: 0 as const, height: 92 }
   return (
     <div style={{
       background: 'white', borderRadius: 20, padding: `${pagePad}px ${pagePad}px ${bp === 'sm' ? 24 : 32}px`,
@@ -925,7 +1360,7 @@ function ActiveTariffsCard() {
       overflow: 'visible',
     }}>
       <span style={{ fontFamily: "var(--fontfamilyaccent)", fontSize: 17, lineHeight: '22px', color: '#2c2d2e' }}>
-        Активные тарифы
+        {paid ? 'У вас 3 активных тарифа, 584 ГБ' : 'У вас 1 активный тариф, 8 ГБ'}
       </span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, overflow: 'visible' }}>
         {/* Free plan */}
@@ -1086,7 +1521,7 @@ function ConnectTbButton() {
 function IncludedFeaturesCard() {
   const { bp, stackCards, paid, pagePad } = useLayout()
   const overlayBtn = !paid && !stackCards
-  const wrapText = bp === 'sm'
+  const wrapText = bp === 'sm' || stackCards
   const features = [
     { icon: PG.cloudIco,   title: paid ? '584 ГБ' : '8 ГБ',        desc: 'Для файлов из Облака, писем и вложений из Почты' },
     { icon: PG.uploadIco,  title: 'Загрузка файлов до 2 ГБ',       desc: 'Сохраняйте документы, билеты, фотографии — открыть их можно с любого устройства' },
@@ -1169,7 +1604,7 @@ function ComparisonTable({ compact }: { compact: boolean }) {
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [featW, tablePad, plans.length])
+  }, [featW, planW, tablePad, plans.length])
 
   useEffect(() => {
     const head = headRef.current
@@ -1368,6 +1803,7 @@ function ComparisonTable({ compact }: { compact: boolean }) {
 export default function App() {
   const [compact, setCompact] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [buyPlanId, setBuyPlanId] = useState<string | null>(null)
   const [paid, setPaidState] = useState(() => paidFromUrl())
 
   const setPaid = (v: boolean) => {
@@ -1407,8 +1843,8 @@ export default function App() {
     }
   }, [])
 
-  const bp = widthToBp(w)
-  const m = metricsFor(bp)
+  const m = metricsFor(w)
+  const bp = m.bp
 
   useEffect(() => {
     if (m.hasSidebar) setMenuOpen(false)
@@ -1425,11 +1861,16 @@ export default function App() {
     return () => el.removeEventListener('scroll', handler)
   }, [])
 
-  const layout: Layout = { bp, w, ...m, menuOpen, setMenuOpen, paid, setPaid }
-  const titleSize = bp === 'sm' ? { fontSize: 24, lineHeight: '30px' } : bp === 'md' ? { fontSize: 28, lineHeight: '34px' } : { fontSize: 32, lineHeight: '40px' }
+  const layout: Layout = { w, ...m, menuOpen, setMenuOpen, paid, setPaid, buyPlanId, setBuyPlanId }
+  const titleSize =
+    bp === 'sm' ? { fontSize: 24, lineHeight: '30px' } :
+    bp === 'md' ? { fontSize: 28, lineHeight: '34px' } :
+    { fontSize: 32, lineHeight: '40px' }
   const padX = m.pagePad
   const contentPadLeft = m.hasSidebar ? 0 : padX
   const contentPadRight = m.hasSidebar ? (bp === 'xl' ? 0 : padX) : padX
+  const sectionGap = bp === 'sm' ? 16 : 24
+  const compactTable = compact || bp === 'sm' || (bp === 'md' && m.contentW < 760)
 
   return (
     <LayoutCtx.Provider value={layout}>
@@ -1465,23 +1906,24 @@ export default function App() {
         )}
 
         <div style={{
-          display: 'flex', gap: 16, alignItems: 'flex-start',
+          display: 'flex', gap: SIDEBAR_GAP, alignItems: 'flex-start',
           paddingBottom: bp === 'sm' ? 80 : 120,
           paddingLeft: contentPadLeft, paddingRight: contentPadRight,
         }}>
           {m.hasSidebar && <Sidebar />}
 
           <div style={{
-            width: bp === 'xl' ? 992 : '100%',
-            maxWidth: bp === 'xl' ? 992 : undefined,
+            width: bp === 'xl' ? CONTENT_DESKTOP : '100%',
+            maxWidth: bp === 'xl' ? CONTENT_DESKTOP : undefined,
             flex: bp === 'xl' ? undefined : 1,
             flexShrink: 1, minWidth: 0,
-            display: 'flex', flexDirection: 'column', gap: bp === 'sm' ? 16 : 24,
+            display: 'flex', flexDirection: 'column', gap: sectionGap,
           }}>
 
             <div style={{
               paddingTop: padX, paddingBottom: 12,
-              width: '100%', maxWidth: bp === 'sm' || bp === 'md' ? '100%' : 600,
+              width: '100%',
+              maxWidth: m.stackCards ? '100%' : Math.min(600, m.contentW),
             }}>
               <h1 style={{
                 fontFamily: "var(--fontfamilyaccent)",
@@ -1512,7 +1954,7 @@ export default function App() {
 
             <div style={{ position: 'relative' }}>
               <div ref={sentinelRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 0 }} />
-              <ComparisonTable compact={compact || bp === 'sm'} />
+              <ComparisonTable compact={compactTable} />
             </div>
 
           </div>
@@ -1533,6 +1975,9 @@ export default function App() {
         </div>
       </div>
     </div>
+    {buyPlanId && (
+      <BuyTariffModal planId={buyPlanId} onClose={() => setBuyPlanId(null)} />
+    )}
     </LayoutCtx.Provider>
   )
 }

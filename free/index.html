@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Личный кабинет подписки Mail Space</title>
+    <link rel="preload" href="/Prototype-Table-Design/fonts/VK_Sans_Display-Medium.woff2" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="/Prototype-Table-Design/fonts/Arial-Regular.woff2" as="font" type="font/ttf" crossorigin />
+    <link rel="icon" type="image/svg+xml" href="/Prototype-Table-Design/favicon-v6.svg" /><link rel="apple-touch-icon" href="/Prototype-Table-Design/favicon-v6.png" />
+    <meta name="description" content="Управление подпиской и местом в едином пространстве Почты и Облака.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="/Prototype-Table-Design/favicon-v6.png">
+    <meta property="og:title" content="Личный кабинет подписки Mail Space">
+    <meta property="og:description" content="Управление подпиской и местом в едином пространстве Почты и Облака.">
+    <script type="module" crossorigin src="/Prototype-Table-Design/assets/index-Ct80Mi-1.js"></script>
+    <link rel="stylesheet" crossorigin href="/Prototype-Table-Design/assets/index-DXEKyHqI.css">
+  </head>
+  <body>
+    
+    <div id="root"></div>
+    <!-- Static GitHub Pages (main branch) cannot run /src/main.tsx — fall back to built /docs -->
+    <script>
+      (function () {
+        // Only when publishing the Vite source shell at the repo root (not /docs/* routes)
+        if (/\/docs(\/|$)/i.test(location.pathname)) return
+        var root = document.getElementById('root')
+        var tries = 0
+        var timer = setInterval(function () {
+          tries += 1
+          if (root && root.childNodes.length > 0) {
+            clearInterval(timer)
+            return
+          }
+          if (tries >= 8) {
+            clearInterval(timer)
+            var base = location.pathname.replace(/\/+$/, '')
+            location.replace(base + '/docs/')
+          }
+        }, 250)
+      })()
+    </script>
+    
+  </body>
+</html>

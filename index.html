@@ -16,6 +16,8 @@
     <!-- Static GitHub Pages (main branch) cannot run /src/main.tsx — fall back to built /docs -->
     <script>
       (function () {
+        // Only when publishing the Vite source shell at the repo root (not /docs/* routes)
+        if (/\/docs(\/|$)/i.test(location.pathname)) return
         var root = document.getElementById('root')
         var tries = 0
         var timer = setInterval(function () {
@@ -27,9 +29,7 @@
           if (tries >= 8) {
             clearInterval(timer)
             var base = location.pathname.replace(/\/+$/, '')
-            if (!/\/docs$/i.test(base)) {
-              location.replace(base + '/docs/')
-            }
+            location.replace(base + '/docs/')
           }
         }, 250)
       })()

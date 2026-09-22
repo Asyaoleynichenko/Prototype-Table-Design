@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:gh": "GITHUB_PAGES_BASE=/Prototype-Table-Design/ vite build && cp dist/index.html dist/404.html",
-    "build:docs": "GITHUB_PAGES_BASE=/Prototype-Table-Design/docs/ vite build && rm -rf docs && mkdir docs && cp -R dist/. docs/ && cp docs/index.html docs/404.html",
+    "build:gh": "GITHUB_PAGES_BASE=/Prototype-Table-Design/ vite build && node scripts/prepare-pages.mjs dist",
+    "build:docs": "GITHUB_PAGES_BASE=/Prototype-Table-Design/docs/ vite build && node scripts/prepare-pages.mjs docs --root-404",
     "preview": "vite preview",
     "format": "oxfmt"
   },

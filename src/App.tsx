@@ -697,7 +697,9 @@ function FeatureRow({ feat }: { feat: Feat }) {
   const [hovered, setHovered] = useState(false)
   const [tip, setTip] = useState<TipState | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
-  const touch = bp === 'sm' || bp === 'md'
+  const canHover = typeof window === 'undefined'
+    || window.matchMedia('(hover: hover)').matches
+  const showInfo = !canHover || hovered || Boolean(tip)
 
   const placeTip = () => {
     if (!btnRef.current) return
@@ -705,6 +707,8 @@ function FeatureRow({ feat }: { feat: Feat }) {
     const x = Math.min(Math.max(r.left + r.width / 2, 128), window.innerWidth - 128)
     setTip({ x, y: r.top, text: paid && feat.tipPaid ? feat.tipPaid : feat.tip })
   }
+
+  const clearTip = () => setTip(null)
 
   const hoverBg = hovered ? 'rgba(0,0,0,0.042)' : 'transparent'
   const hoverBgSolid = hovered ? '#f5f5f5' : 'white'
@@ -719,7 +723,7 @@ function FeatureRow({ feat }: { feat: Feat }) {
           minWidth: featW + plans.length * planW,
         }}
         onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { setHovered(false); if (!touch) setTip(null) }}
+        onMouseLeave={() => { setHovered(false); clearTip() }}
       >
         <div style={{
           position: 'sticky', left: 0, zIndex: 4,
@@ -743,17 +747,27 @@ function FeatureRow({ feat }: { feat: Feat }) {
           </span>
           <button
             ref={btnRef}
-            onMouseEnter={() => { if (!touch) placeTip() }}
-            onMouseLeave={() => { if (!touch) setTip(null) }}
-            onClick={() => { if (touch) { if (tip) setTip(null); else placeTip() } }}
+            type="button"
+            onMouseEnter={placeTip}
+            onMouseLeave={clearTip}
+            onFocus={placeTip}
+            onBlur={clearTip}
+            onClick={(e) => {
+              if (canHover) return
+              e.preventDefault()
+              if (tip) clearTip()
+              else placeTip()
+            }}
             aria-label="Подробнее"
             style={{
-              opacity: hovered || touch ? 1 : 0, transition: 'opacity 150ms',
+              opacity: showInfo ? 1 : 0,
+              transition: 'opacity 150ms',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: 16, height: 16, borderRadius: '50%',
               border: '1.5px solid rgba(0,0,0,0.3)',
               background: 'transparent', cursor: 'pointer',
-              flexShrink: 0, marginLeft: 'auto',
+              flexShrink: 0, marginLeft: 'auto', padding: 0,
+              pointerEvents: showInfo ? 'auto' : 'none',
             }}
           >
             <span style={{
@@ -811,6 +825,9 @@ function PlanCard({ plan, compact }: { plan: PlanDef; compact: boolean }) {
   const currentPaid = paid && plan.isCurrent
   const openBuy = () => { if (plan.price) setBuyPlanId(plan.id) }
   const hideSub = paid
+  // Short label when card is narrow or table header is compact
+  const shortBtn = compact || planW < 220
+  const showDisc = Boolean(plan.disc && !currentPaid)
   const TR = 'max-height 260ms ease-out, opacity 220ms ease-out'
   const show = (visible: boolean, maxH: number) => ({
     maxHeight: visible ? maxH : 0,
@@ -898,32 +915,40 @@ function PlanCard({ plan, compact }: { plan: PlanDef; compact: boolean }) {
       </div>
 
       {plan.price && (
-        <div style={{ position: 'relative', marginTop: compact ? 8 : 24, alignSelf: 'flex-start' }}>
+        <div style={{
+          position: 'relative',
+          marginTop: compact ? 8 : 16,
+          paddingTop: showDisc ? 12 : 0,
+          alignSelf: 'flex-start',
+          maxWidth: '100%',
+        }}>
           <button
-              type="button"
-              onClick={openBuy}
-              style={{
-                width: 'fit-content', height: 36,
-                background: currentPaid ? '#f0f1f3' : '#0077ff',
-                color: currentPaid ? '#2c2d2e' : 'white',
-                fontFamily: "var(--fontfamilyaccent)",
-                fontSize: 15, lineHeight: '20px',
-                borderRadius: 8, padding: '8px 16px',
-                border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxSizing: 'border-box',
-              }}>
-                {paid ? plan.price : compact ? 'Подключить' : `Подключить ${plan.price}`}
-              </button>
-              {plan.disc && !currentPaid && (
+            type="button"
+            onClick={openBuy}
+            style={{
+              width: 'fit-content', maxWidth: '100%', height: 36,
+              background: currentPaid ? '#f0f1f3' : '#0077ff',
+              color: currentPaid ? '#2c2d2e' : 'white',
+              fontFamily: "var(--fontfamilyaccent)",
+              fontSize: shortBtn ? 14 : 15, lineHeight: '20px',
+              borderRadius: 8, padding: shortBtn ? '8px 12px' : '8px 16px',
+              border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxSizing: 'border-box', whiteSpace: 'nowrap',
+            }}
+          >
+            {paid ? plan.price : shortBtn ? 'Подключить' : `Подключить ${plan.price}`}
+          </button>
+          {showDisc && (
             <div style={{
-              position: 'absolute', top: -11, right: 4,
+              position: 'absolute', top: 0, right: -2,
               transform: 'rotate(5deg)',
               background: '#b8fc75', color: '#087c6d',
               fontFamily: "var(--fontfamilybase)",
               fontSize: 11, lineHeight: '14px',
               padding: '1px 8px 2px', borderRadius: 10,
-              whiteSpace: 'nowrap',
+              whiteSpace: 'nowrap', pointerEvents: 'none',
+              zIndex: 1,
             }}>
               {plan.disc}
             </div>
@@ -1500,7 +1525,7 @@ function ActiveTariffsCard() {
 
 function ConnectTbButton() {
   return (
-    <div style={{ position: 'relative', width: 'fit-content' }}>
+    <div style={{ position: 'relative', width: 'fit-content', paddingTop: 10 }}>
       <button style={{
         background: '#07f', color: 'white',
         fontFamily: "var(--fontfamilyaccent)",
@@ -1508,11 +1533,12 @@ function ConnectTbButton() {
         borderRadius: 8, padding: '6px 12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
       }}>Подключить 1 ТБ</button>
       <div style={{
-        position: 'absolute', top: -11, right: -4, transform: 'rotate(5deg)',
+        position: 'absolute', top: 0, right: -4, transform: 'rotate(5deg)',
         background: '#b8fc75', color: '#087c6d',
         fontFamily: "var(--fontfamilybase)",
         fontSize: 9, lineHeight: '12px',
         padding: '1px 8px 2px', borderRadius: 10, whiteSpace: 'nowrap',
+        pointerEvents: 'none',
       }}>Месяц бесплатно</div>
     </div>
   )
